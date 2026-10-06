@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+:root {
+  --maroon: #6d0808;
+  --cream: #eeead7;
+  --paper: #fbf8ee;
+  --ink: #211d1a;
+  --muted: #706861;
+  --line: #d8d0bb;
+  --sage: #64705f;
+  --gold: #a8782f;
+  --clay: #9b5549;
+  --blue: #3f6475;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--cream);
+  color: var(--ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+canvas {
+  width: 100%;
+}
