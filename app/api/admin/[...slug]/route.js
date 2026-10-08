@@ -8,71 +8,111 @@ import * as svc from "@/lib/service";
  * snapshot data terbaru ("data") sehingga UI selalu konsisten dengan server.
  */
 const routes = [
-  ["GET", "data", async ({ admin }) => ({ data: svc.loadAll(getDb(), admin) })],
+  ["GET", "data", async ({ admin, session }) => {
+    const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+    const res = await fetch(`${laravelUrl}/admin/bff/load-all`, {
+      headers: { "Authorization": `Bearer ${session.token}`, "Accept": "application/json" }
+    });
+    if (!res.ok) return { data: svc.loadAll(getDb(), admin) }; // Fallback to db.json if Laravel fails
+    const json = await res.json();
+    return { data: json.data };
+  }],
   ["GET", "stats", async (_c, { url }) => ({ stats: svc.computeStats(getDb(), url.searchParams.get("period") || "bulanan") }), ["super_admin", "admin", "marketing"]],
   ["GET", "sessions", async ({ admin, session }) => ({ sessions: svc.listSessions(getDb(), admin, session.token) })],
   ["GET", "global-search", async ({ admin }, { url }) => svc.globalSearch(getDb(), admin, url.searchParams.get("q"))],
   ["GET", "search", async ({ admin }, { url }) => svc.globalSearch(getDb(), admin, url.searchParams.get("q"))],
 
-  ["POST", "kosts", async ({ admin }, { body }) => write(admin, (db) => ({ kost: svc.createKost(db, admin, body) })), ["super_admin", "admin"]],
-  ["PATCH", "kosts/:id", async ({ admin }, { body, params }) => write(admin, (db) => ({ kost: svc.updateKost(db, admin, params.id, body) })), ["super_admin", "admin", "moderator"]],
-  ["DELETE", "kosts/:id", async ({ admin }, { params }) => write(admin, (db) => svc.deleteKost(db, admin, params.id)), ["super_admin", "admin"]],
-  ["POST", "kosts/:id/status", async ({ admin }, { body, params }) => write(admin, (db) => ({ kost: svc.setKostStatus(db, admin, params.id, body.status, body.reason) })), ["super_admin", "admin", "moderator"]],
-  ["POST", "kosts/:id/archive", async ({ admin }, { params }) => write(admin, (db) => ({ kost: svc.archiveKost(db, admin, params.id) })), ["super_admin", "admin"]],
-  ["POST", "kosts/:id/restore", async ({ admin }, { params }) => write(admin, (db) => ({ kost: svc.restoreKost(db, admin, params.id) })), ["super_admin", "admin"]],
-  ["DELETE", "kosts/:id/permanent", async ({ admin }, { params }) => write(admin, (db) => svc.permanentDeleteKost(db, admin, params.id)), ["super_admin"]],
-  ["POST", "kosts/bulk", async ({ admin }, { body }) => write(admin, (db) => svc.bulkKostAction(db, admin, body)), ["super_admin", "admin", "moderator"]],
+  ["POST", "kosts", async (auth, { body }) => write(auth, (db) => ({ kost: svc.createKost(db, auth.admin, body) })), ["super_admin", "admin"]],
+  ["PATCH", "kosts/:id", async (auth, { body, params }) => write(auth, (db) => ({ kost: svc.updateKost(db, auth.admin, params.id, body) })), ["super_admin", "admin", "moderator"]],
+  ["DELETE", "kosts/:id", async (auth, { params }) => write(auth, (db) => svc.deleteKost(db, auth.admin, params.id)), ["super_admin", "admin"]],
+  ["POST", "kosts/:id/status", async (auth, { body, params }) => write(auth, (db) => ({ kost: svc.setKostStatus(db, auth.admin, params.id, body.status, body.reason) }), { method: 'PATCH', path: `/admin/kosts/${params.id}/status`, body }), ["super_admin", "admin", "moderator"]],
+  ["POST", "kosts/:id/archive", async (auth, { params }) => write(auth, (db) => ({ kost: svc.archiveKost(db, auth.admin, params.id) })), ["super_admin", "admin"]],
+  ["POST", "kosts/:id/restore", async (auth, { params }) => write(auth, (db) => ({ kost: svc.restoreKost(db, auth.admin, params.id) })), ["super_admin", "admin"]],
+  ["DELETE", "kosts/:id/permanent", async (auth, { params }) => write(auth, (db) => svc.permanentDeleteKost(db, auth.admin, params.id)), ["super_admin"]],
+  ["POST", "kosts/bulk", async (auth, { body }) => write(auth, (db) => svc.bulkKostAction(db, auth.admin, body)), ["super_admin", "admin", "moderator"]],
 
-  ["PATCH", "owners/:id", async ({ admin }, { body, params }) => write(admin, (db) => ({ owner: svc.updateOwner(db, admin, params.id, body) })), ["super_admin", "admin"]],
-  ["DELETE", "owners/:id", async ({ admin }, { params }) => write(admin, (db) => svc.deleteOwner(db, admin, params.id)), ["super_admin", "admin"]],
-  ["POST", "owners/:id/action", async ({ admin }, { body, params }) => write(admin, (db) => ({ owner: svc.ownerAction(db, admin, params.id, body) })), ["super_admin", "admin", "moderator"]],
-  ["POST", "owners/:id/archive", async ({ admin }, { params }) => write(admin, (db) => ({ owner: svc.archiveOwner(db, admin, params.id) })), ["super_admin", "admin"]],
-  ["POST", "owners/:id/restore", async ({ admin }, { params }) => write(admin, (db) => ({ owner: svc.restoreOwner(db, admin, params.id) })), ["super_admin", "admin"]],
-  ["DELETE", "owners/:id/permanent", async ({ admin }, { body, params }) => write(admin, (db) => svc.permanentDeleteOwner(db, admin, params.id, body)), ["super_admin"]],
-  ["POST", "owners/:id/permanent", async ({ admin }, { body, params }) => write(admin, (db) => svc.permanentDeleteOwner(db, admin, params.id, body)), ["super_admin"]],
-  ["POST", "owners/bulk", async ({ admin }, { body }) => write(admin, (db) => svc.bulkOwnerAction(db, admin, body)), ["super_admin", "admin", "moderator"]],
+  ["PATCH", "owners/:id", async (auth, { body, params }) => write(auth, (db) => ({ owner: svc.updateOwner(db, auth.admin, params.id, body) })), ["super_admin", "admin"]],
+  ["DELETE", "owners/:id", async (auth, { params }) => write(auth, (db) => svc.deleteOwner(db, auth.admin, params.id)), ["super_admin", "admin"]],
+  ["POST", "owners/:id/action", async (auth, { body, params }) => write(auth, (db) => ({ owner: svc.ownerAction(db, auth.admin, params.id, body) })), ["super_admin", "admin", "moderator"]],
+  ["POST", "owners/:id/archive", async (auth, { params }) => write(auth, (db) => ({ owner: svc.archiveOwner(db, auth.admin, params.id) })), ["super_admin", "admin"]],
+  ["POST", "owners/:id/restore", async (auth, { params }) => write(auth, (db) => ({ owner: svc.restoreOwner(db, auth.admin, params.id) })), ["super_admin", "admin"]],
+  ["DELETE", "owners/:id/permanent", async (auth, { body, params }) => write(auth, (db) => svc.permanentDeleteOwner(db, auth.admin, params.id, body)), ["super_admin"]],
+  ["POST", "owners/:id/permanent", async (auth, { body, params }) => write(auth, (db) => svc.permanentDeleteOwner(db, auth.admin, params.id, body)), ["super_admin"]],
+  ["POST", "owners/bulk", async (auth, { body }) => write(auth, (db) => svc.bulkOwnerAction(db, auth.admin, body)), ["super_admin", "admin", "moderator"]],
 
-  ["PATCH", "users/:id", async ({ admin }, { body, params }) => write(admin, (db) => ({ user: svc.updateUser(db, admin, params.id, body) })), ["super_admin", "admin"]],
-  ["DELETE", "users/:id", async ({ admin }, { params }) => write(admin, (db) => svc.deleteUser(db, admin, params.id)), ["super_admin", "admin"]],
-  ["POST", "users/:id/status", async ({ admin }, { body, params }) => write(admin, (db) => ({ user: svc.setUserStatus(db, admin, params.id, body.status) })), ["super_admin", "admin"]],
-  ["POST", "users/:id/archive", async ({ admin }, { params }) => write(admin, (db) => ({ user: svc.archiveUser(db, admin, params.id) })), ["super_admin", "admin"]],
-  ["POST", "users/:id/restore", async ({ admin }, { params }) => write(admin, (db) => ({ user: svc.restoreUser(db, admin, params.id) })), ["super_admin", "admin"]],
-  ["DELETE", "users/:id/permanent", async ({ admin }, { params }) => write(admin, (db) => svc.permanentDeleteUser(db, admin, params.id)), ["super_admin"]],
-  ["POST", "users/:id/permanent", async ({ admin }, { params }) => write(admin, (db) => svc.permanentDeleteUser(db, admin, params.id)), ["super_admin"]],
-  ["POST", "users/bulk", async ({ admin }, { body }) => write(admin, (db) => svc.bulkUserAction(db, admin, body)), ["super_admin", "admin"]],
+  ["PATCH", "users/:id", async (auth, { body, params }) => write(auth, (db) => ({ user: svc.updateUser(db, auth.admin, params.id, body) })), ["super_admin", "admin"]],
+  ["DELETE", "users/:id", async (auth, { params }) => write(auth, (db) => svc.deleteUser(db, auth.admin, params.id)), ["super_admin", "admin"]],
+  ["POST", "users/:id/status", async (auth, { body, params }) => write(auth, (db) => ({ user: svc.setUserStatus(db, auth.admin, params.id, body.status) }), { method: 'PATCH', path: `/admin/users/${params.id}/status`, body }), ["super_admin", "admin"]],
+  ["POST", "users/:id/archive", async (auth, { params }) => write(auth, (db) => ({ user: svc.archiveUser(db, auth.admin, params.id) })), ["super_admin", "admin"]],
+  ["POST", "users/:id/restore", async (auth, { params }) => write(auth, (db) => ({ user: svc.restoreUser(db, auth.admin, params.id) })), ["super_admin", "admin"]],
+  ["DELETE", "users/:id/permanent", async (auth, { params }) => write(auth, (db) => svc.permanentDeleteUser(db, auth.admin, params.id)), ["super_admin"]],
+  ["POST", "users/:id/permanent", async (auth, { params }) => write(auth, (db) => svc.permanentDeleteUser(db, auth.admin, params.id)), ["super_admin"]],
+  ["POST", "users/bulk", async (auth, { body }) => write(auth, (db) => svc.bulkUserAction(db, auth.admin, body)), ["super_admin", "admin"]],
 
-  ["PATCH", "reports/:id", async ({ admin }, { body, params }) => write(admin, (db) => ({ report: svc.updateReport(db, admin, params.id, body) })), ["super_admin", "admin", "moderator"]],
+  ["PATCH", "reports/:id", async (auth, { body, params }) => write(auth, (db) => ({ report: svc.updateReport(db, auth.admin, params.id, body) })), ["super_admin", "admin", "moderator"]],
 
-  ["POST", "ads", async ({ admin }, { body }) => write(admin, (db) => ({ ad: svc.createAd(db, admin, body) })), ["super_admin", "marketing"]],
-  ["PATCH", "ads/:id", async ({ admin }, { body, params }) => write(admin, (db) => ({ ad: svc.updateAd(db, admin, params.id, body) })), ["super_admin", "marketing"]],
-  ["DELETE", "ads/:id", async ({ admin }, { params }) => write(admin, (db) => svc.deleteAd(db, admin, params.id)), ["super_admin", "marketing"]],
-  ["POST", "ads/:id/toggle", async ({ admin }, { params }) => write(admin, (db) => ({ ad: svc.toggleAd(db, admin, params.id) })), ["super_admin", "marketing"]],
-  ["POST", "ads/:id/archive", async ({ admin }, { params }) => write(admin, (db) => ({ ad: svc.archiveAd(db, admin, params.id) })), ["super_admin", "marketing"]],
-  ["POST", "ads/:id/restore", async ({ admin }, { params }) => write(admin, (db) => ({ ad: svc.restoreAd(db, admin, params.id) })), ["super_admin", "marketing"]],
-  ["DELETE", "ads/:id/permanent", async ({ admin }, { params }) => write(admin, (db) => svc.permanentDeleteAd(db, admin, params.id)), ["super_admin"]],
+  ["POST", "ads", async (auth, { body }) => write(auth, (db) => ({ ad: svc.createAd(db, auth.admin, body) }), { method: 'POST', path: '/admin/ads', body }), ["super_admin", "marketing"]],
+  ["PATCH", "ads/:id", async (auth, { body, params }) => write(auth, (db) => ({ ad: svc.updateAd(db, auth.admin, params.id, body) })), ["super_admin", "marketing"]],
+  ["DELETE", "ads/:id", async (auth, { params }) => write(auth, (db) => svc.deleteAd(db, auth.admin, params.id)), ["super_admin", "marketing"]],
+  ["POST", "ads/:id/toggle", async (auth, { params }) => write(auth, (db) => ({ ad: svc.toggleAd(db, auth.admin, params.id) }), { method: 'PATCH', path: `/admin/ads/${params.id}/status` }), ["super_admin", "marketing"]],
+  ["POST", "ads/:id/archive", async (auth, { params }) => write(auth, (db) => ({ ad: svc.archiveAd(db, auth.admin, params.id) })), ["super_admin", "marketing"]],
+  ["POST", "ads/:id/restore", async (auth, { params }) => write(auth, (db) => ({ ad: svc.restoreAd(db, auth.admin, params.id) })), ["super_admin", "marketing"]],
+  ["DELETE", "ads/:id/permanent", async (auth, { params }) => write(auth, (db) => svc.permanentDeleteAd(db, auth.admin, params.id)), ["super_admin"]],
 
-  ["PATCH", "settings/profile", async ({ admin }, { body }) => write(admin, (db) => ({ profile: svc.updateProfile(db, admin, body) }))],
-  ["POST", "settings/password", async ({ admin, session }, { body }) => write(admin, (db) => svc.changePassword(db, admin, session.token, body))],
-  ["PATCH", "settings/notifications", async ({ admin }, { body }) => write(admin, (db) => ({ notifications: svc.updateNotifications(db, admin, body) }))],
-  ["PATCH", "settings/system", async ({ admin }, { body }) => write(admin, (db) => ({ system: svc.updateSystem(db, admin, body) })), ["super_admin"]],
+  ["PATCH", "settings/profile", async (auth, { body }) => write(auth, (db) => ({ profile: svc.updateProfile(db, auth.admin, body) }))],
+  ["POST", "settings/password", async (auth, { body }) => write(auth, (db) => svc.changePassword(db, auth.admin, session.token, body))],
+  ["PATCH", "settings/notifications", async (auth, { body }) => write(auth, (db) => ({ notifications: svc.updateNotifications(db, auth.admin, body) }))],
+  ["PATCH", "settings/system", async (auth, { body }) => write(auth, (db) => ({ system: svc.updateSystem(db, auth.admin, body) })), ["super_admin"]],
 
   ["GET", "admins", async ({ admin }) => ({ admins: svc.listAdmins(getDb(), admin) }), ["super_admin"]],
-  ["POST", "admins", async ({ admin }, { body }) => write(admin, (db) => ({ admin: svc.createAdmin(db, admin, body) })), ["super_admin"]],
-  ["PATCH", "admins/:id", async ({ admin }, { body, params }) => write(admin, (db) => ({ admin: svc.updateAdmin(db, admin, params.id, body) })), ["super_admin"]],
-  ["DELETE", "admins/:id", async ({ admin }, { params }) => write(admin, (db) => svc.deleteAdmin(db, admin, params.id)), ["super_admin"]],
+  ["POST", "admins", async (auth, { body }) => write(auth, (db) => ({ admin: svc.createAdmin(db, auth.admin, body) })), ["super_admin"]],
+  ["PATCH", "admins/:id", async (auth, { body, params }) => write(auth, (db) => ({ admin: svc.updateAdmin(db, auth.admin, params.id, body) })), ["super_admin"]],
+  ["DELETE", "admins/:id", async (auth, { params }) => write(auth, (db) => svc.deleteAdmin(db, auth.admin, params.id)), ["super_admin"]],
 
-  ["POST", "notifications/read", async ({ admin }, { body }) => write(admin, (db) => svc.markNotificationRead(db, admin, body.id))],
-  ["POST", "notifications/read-all", async ({ admin }) => write(admin, (db) => svc.markAllNotificationsRead(db, admin))],
+  ["POST", "notifications/read", async (auth, { body }) => write(auth, (db) => svc.markNotificationRead(db, auth.admin, body.id))],
+  ["POST", "notifications/read-all", async (auth) => write(auth, (db) => svc.markAllNotificationsRead(db, auth.admin))],
 
-  ["DELETE", "sessions/:id", async ({ admin, session }, { params }) => write(admin, (db) => svc.revokeSession(db, admin, session.token, params.id))],
-  ["POST", "sessions/revoke-others", async ({ admin, session }) => write(admin, (db) => ({ revoked: svc.revokeOtherSessions(db, admin, session.token) }))],
+  ["DELETE", "sessions/:id", async (auth, { params }) => write(auth, (db) => svc.revokeSession(db, auth.admin, session.token, params.id))],
+  ["POST", "sessions/revoke-others", async ({ admin, session }) => write(auth, (db) => ({ revoked: svc.revokeOtherSessions(db, auth.admin, session.token) }))],
 ];
 
-function write(admin, fn) {
-  const result = mutate((db) => fn(db)) || {};
+async function write(auth, fn, laravelProxy = null) {
+  const { admin, session } = auth;
+  let result = {};
+  
+  if (laravelProxy) {
+     const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+     try {
+       const res = await fetch(`${laravelUrl}${laravelProxy.path}`, {
+         method: laravelProxy.method,
+         headers: { "Authorization": `Bearer ${session.token}`, "Content-Type": "application/json", "Accept": "application/json" },
+         body: laravelProxy.body ? JSON.stringify(laravelProxy.body) : undefined
+       });
+       if (res.ok) result = await res.json();
+       else result = mutate((db) => fn(db)) || {};
+     } catch {
+       result = mutate((db) => fn(db)) || {};
+     }
+  } else {
+     result = mutate((db) => fn(db)) || {};
+  }
+  
+  const laravelUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api/v1';
+  const dataRes = await fetch(`${laravelUrl}/admin/bff/load-all`, {
+    headers: { "Authorization": `Bearer ${session.token}`, "Accept": "application/json" }
+  }).catch(() => null);
+  
   const db = getDb();
   const fresh = db.admins.find((a) => a.id === admin.id) || admin;
-  return { ...result, data: svc.loadAll(db, fresh), admin: publicAdmin(fresh) };
+  
+  let data;
+  if (dataRes && dataRes.ok) {
+     data = (await dataRes.json()).data;
+  } else {
+     data = svc.loadAll(db, fresh);
+  }
+  
+  return { ...result, data, admin: publicAdmin(fresh) };
 }
 
 function match(method, segments) {
