@@ -11,9 +11,15 @@ export const metadata = {
   description: "Admin panel untuk mengelola platform CariKostKita.",
 };
 
+// Terapkan tema tersimpan sebelum render agar tidak berkedip.
+const themeScript = `try{var t=localStorage.getItem("ckk.theme");if(t==="dark"||(t==="system"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`;
+
 export default function RootLayout({ children }) {
   return (
-    <html lang="id">
+    <html lang="id" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className={jakarta.className}>{children}</body>
     </html>
   );
